@@ -9,9 +9,9 @@ import RealEstate from './abis/RealEstate.json';
 // Config
 import config from './config.json';
 
+import CreatePropertyForm from './components/CreatePropertyForm';
 import Home from './components/Home';
 import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Separator } from './components/ui/separator';
 
@@ -68,11 +68,12 @@ function App() {
     <>
     <main className='container py-8 md:py-16'>
       <div className='mb-8 flex flex-row justify-between'>
-      <h1 className='text-4xl font-bold'>Web3 Real Estate</h1>
-      <div>
-        <Button>Create Listing</Button>
+        <h1 className='text-4xl font-bold'>Web3 Real Estate</h1>
+        <div>
+          <CreatePropertyForm></CreatePropertyForm>
+        </div>  
       </div>
-      </div>
+      <hr className='my-8'></hr>
       <div className='grid grid-cols-3 gap-4'>
           {homes.map((home, index) => (
             <Card onClick={() => togglePop(home)} key={index} className="cursor-pointer hover:shadow-md flex flex-col">
