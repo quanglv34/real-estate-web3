@@ -1,69 +1,99 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; 
-import "./RealEstateNFT.sol"; 
 
-contract RealEstateMarketplace is RealEstateNFT {
+contract RealEstate {
     address public erc20Address;
+    uint public itemCount; 
 
-    constructor(address  _currency) RealEstateNFT(msg.sender) {
+    constructor(address  _currency) {
         erc20Address = _currency;
     }
 
-    Property[] properties;
+    mapping(uint => Property) public properties;
 
-    // Struct
     struct Property {
         uint id;
         IERC721 nft;
-        string name;
+        uint tokenId;
         uint price;
-        address payable owner;
         address payable seller;
         bool sold;
+        bool available;
     }
 
-    // EVENTS
-    event PropertyCreated (
+    event PropertyOffered (
+        uint itemId,
+        address indexed nft,
         uint tokenId,
-        string name,
-        string uri
+        uint price,
+        address indexed seller
+    );
+
+    event PropertyCancelled (
+        uint itemId,
+        address indexed nft,
+        uint tokenId,
+        uint price,
+        address indexed seller
     );
 
     event PropertyPurchased (
-        uint tokenId,
-        string price,
-        string uri
+        uint itemId,
+        address nft,
+        uint indexed tokenId,
+        uint price,
+        address indexed seller,
+        address indexed buyer
     );
 
-    // Function 
-    function createProperty(string memory uri, uint256 _price) public {
-        require(msg.sender == owner(), "You are not owner");
-        require(_price > 0, "Product price should be greater than 0");
+    function offerProperty(IERC721 _nft, uint _tokenId, uint256 _price) public {
+        require(_price > 0, "Price must be greater than zero");
+        _nft.transferFrom(msg.sender, address(this), _tokenId);
+        properties[itemCount] = Property(itemCount, _nft, _tokenId, _price, payable(msg.sender), false, true);
 
-        uint256 tokenId = safeMint(owner(), uri); 
+        emit PropertyOffered(
+            itemCount,
+            address(_nft),
+            _tokenId,
+            _price,
+            msg.sender
+        );
 
-        Property memory newProduct;
-        newProduct.tokenId = tokenId; 
-        newProduct.price = _price;
-        newProduct.uri = uri;
-        tokenIdToProduct[tokenId] = newProduct;
+        itemCount++;
+    }
+
+    function cancelPropertySales(uint _itemId) public {
+        require(_itemId >= 0 && _itemId <= itemCount, "item doesn't exist");
+
+        Property storage item = properties[_itemId];
+
+        require(msg.sender == item.seller, "only seller can cancel sales");
+        require(item.available, "item doesn't available");
+        require(!item.sold, "item is sold");
+
+        item.available = true;
         
-        emit PropertyCreated(productCount, _name, _price, msg.sender, false);
-        products.push(newProduct); 
+        item.nft.transferFrom(address(this), msg.sender, item.tokenId);
 
+        emit PropertyCancelled(_itemId, address(item.nft), item.tokenId, item.price, item.seller);
     }
 
-    function purchaseProperty(uint256 _tokenId) public { 
-        require(IERC20(erc20Address).allowance(msg.sender, address(this)) >= tokenIdToProduct[_tokenId].price, "insufficient approval");
-        IERC20(erc20Address).transferFrom(msg.sender, address(this), tokenIdToProduct[_tokenId].price); 
-        this.transferFrom(owner(), msg.sender, _tokenId);
+    function purchaseProperty(uint256 _itemId) public payable { 
+        Property storage item = properties[_itemId];
 
-        emit PropertyPurchased(_id, myProduct.name, myProduct.price, seller, myProduct.owner, true);
-    }
+        require(_itemId >= 0 && _itemId <= itemCount, "item doesn't exist");
+        require(!item.sold, "item already sold");
+        require(item.available, "item not available");
+        require(IERC20(erc20Address).allowance(msg.sender, address(this)) >= properties[_itemId].price, "not enough fund to cover item price");
 
-    function getAllProperties() public view returns (Property[] memory) {
-        return products; 
+        IERC20(erc20Address).transferFrom(msg.sender, item.seller, properties[_itemId].price); 
+        item.nft.transferFrom(address(this), msg.sender, item.tokenId);
+
+        item.sold = true;
+
+        emit PropertyPurchased(_itemId, address(item.nft), item.tokenId, item.price, item.seller, msg.sender);
     }
 }
