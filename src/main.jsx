@@ -2,6 +2,7 @@ import App from '@/App.jsx';
 import '@/globals.css';
 import ErrorPage from '@/pages/ErrorPage.jsx';
 import ProfilePage from '@/pages/ProfilePage.jsx';
+import { MetaMaskUIProvider } from "@metamask/sdk-react-ui";
 import {
   QueryClient,
   QueryClientProvider
@@ -13,6 +14,7 @@ import {
   createBrowserRouter,
 } from "react-router-dom";
 import Layout from './Layout';
+import ListProperties from './pages/ListProperties';
 
 const router = createBrowserRouter([
   {
@@ -29,8 +31,8 @@ const router = createBrowserRouter([
         element: <ProfilePage />,
       },
       {
-        path: "properties/{id}",
-        element: <App />,
+        path: "properties",
+        element: <ListProperties />,
       },
     ]
   },
@@ -41,8 +43,14 @@ const queryClient = new QueryClient()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <MetaMaskUIProvider debug={false} sdkOptions={{
+      dappMetadata: {
+        name: "Real Estate Web3",
+      }
+    }}>
+      <QueryClientProvider client={queryClient}>
+            <RouterProvider router={router} />
+      </QueryClientProvider>
+    </MetaMaskUIProvider>
   </React.StrictMode>,
 )
