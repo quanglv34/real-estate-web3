@@ -1,63 +1,64 @@
-import { ethers } from 'ethers';
 import { useEffect, useState } from 'react';
 import './globals.css';
 
 // ABIs
-import Escrow from './abis/Escrow.json';
-import RealEstate from './abis/RealEstate.json';
 
 // Config
-import config from './config.json';
 
+import axios from 'axios';
 import CreatePropertyForm from './components/CreatePropertyForm';
-import Home from './components/Home';
+import { ViewPropertyDialog } from './components/ViewPropertyDialog';
 import { Badge } from './components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
-import { Separator } from './components/ui/separator';
+import { Button } from './components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './components/ui/card';
+import { loadContracts } from './lib/contracts';
 
 function App() {
-  const [provider, setProvider] = useState(null)
-  const [escrow, setEscrow] = useState(null)
-
-  const [account, setAccount] = useState(null)
-
-  const [homes, setHomes] = useState([])
-  const [home, setHome] = useState({})
-  const [toggle, setToggle] = useState(false);
+  const [properties, setProperties] = useState([])
+  const [signer, setSigner] = useState(null)
 
   const loadBlockchainData = async () => {
-    const provider = new ethers.BrowserProvider(window.ethereum)
-    setProvider(provider)
-    const network = await provider.getNetwork()
+    const { provider, marketplace, nft } = await loadContracts()
+    const user = await provider.getSigner()
+    setSigner(user.address)
+    const itemCount = parseInt(await marketplace.itemCount())
+    console.log("itemCount", itemCount)
+    const marketplaceProperties = await Promise.all(
+      Array.from({length: itemCount}, async (_, item) => {
+          const property = await marketplace.properties(item)
+          const nftMetadata = await nft.tokenURI(property.tokenId)
+          const metadata = await axios.get(`https://amethyst-adequate-roundworm-419.mypinata.cloud/ipfs/${nftMetadata}?pinataGatewayToken=${import.meta.env.VITE_PINATA_GATEWAY_TOKEN}`).then(response => response.data)
+          return {
+            id:  property.id,
+            tokenId:  property.tokenId,
+            price: property.price,
+            seller: property.seller,
+            isSold: property.sold,
+            isAvailable: property.available,
+            metadata: metadata
+          }
+        })
+    )
 
-    const realEstate = new ethers.Contract(config[network.chainId].realEstate.address, RealEstate, provider)
-    const totalSupply = await realEstate.totalSupply()
-    const homes = []
-    
-    for (var i = 0; i < Number(totalSupply); i++) {
-      const uri = await realEstate.tokenURI(i)
-      const response = await fetch(uri)
-      const metadata = await response.json()
-      homes.push(metadata)
-    }
-    console.log("totalSupply", homes);
-    
-    
-    setHomes(homes)
+    console.log(marketplaceProperties)
 
-    const escrow = new ethers.Contract(config[network.chainId].escrow.address, Escrow, provider)
-    setEscrow(escrow)
+    setProperties(marketplaceProperties)
+  }
 
-    window.ethereum.on('accountsChanged', async () => {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const account = ethers.utils.getAddress(accounts[0])
-      setAccount(account);
+  const onBuy = async (home) => {
+    const { provider, marketplace, nft, token } = await loadContracts()
+    const tx = await token.approve(marketplace.target, home.price);
+    await provider.waitForTransaction(tx.hash)
+    const tx2 = await marketplace.purchaseProperty(parseInt(home.id))
+    await provider.waitForTransaction(tx2.hash)
+    loadBlockchainData()
+    toast({
+      description: "You bought a property."
     })
   }
 
-  const togglePop = (home) => {
-    setHome(home)
-    toggle ? setToggle(false) : setToggle(true);
+  const onCancel = async (home) => {
+
   }
 
   useEffect(() => {
@@ -75,34 +76,41 @@ function App() {
       </div>
       <hr className='my-8'></hr>
       <div className='grid grid-cols-3 gap-4'>
-          {homes.map((home, index) => (
-            <Card onClick={() => togglePop(home)} key={index} className="cursor-pointer hover:shadow-md flex flex-col">
-              <img src={home.image} alt="Home"  className='rounded-t-lg'/>
+          {properties.map((home, index) => (
+            <Card key={index} className="cursor-pointer hover:shadow-md flex flex-col">
+              <img src={`https://ipfs.io/ipfs/${home.metadata.imageCid}`} alt="Home"  className='rounded-t-lg aspect-video object-cover'/>
               <CardHeader>
-                <Badge className="mb-2 w-fit">{home.attributes[0].value} ETH</Badge>
+                <Badge className="mb-2 w-fit">{parseInt(home.price)} REAL</Badge>
                 <CardTitle className="space-y">
-                <span>{ home.name}</span>
+                  <span>{ home.metadata.name}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-col grow">
-                <div className=''>
-                  <p className="flex h-5 items-center space-x-2 text-sm">
-                  <strong>{home.attributes[2].value}</strong> bds 
-                  <Separator orientation="vertical" />
-                  <strong>{home.attributes[3].value}</strong> ba 
-                  <Separator orientation="vertical" />
-                  <strong>{home.attributes[4].value}</strong> sqft
-                </p>
-                <p>{home.address}</p>
+              <CardContent className="flex flex-col grow gap-2">
+                <p><span className="font-medium">Seller:</span> {home.seller}</p>   
+                <p><span className="font-medium">Address:</span> {home.metadata.address}</p>   
+                <p><span className="font-medium">Description:</span> {home.metadata.description}</p>   
+                <div className='flex flex-row gap-2'>
+                  {
+                    home.isAvailable 
+                    ? <Badge>{ home.isSold ? "Is Sold" : "Can Buy"}</Badge>
+                    : <Badge variant="destructive">{ home.isAvailable  ? "Is Available" : "Is Cancelled"}</Badge>
+                  } 
                 </div>
-   
               </CardContent>
+              <CardFooter className="gap-4">
+                <ViewPropertyDialog variant="outline" propertyId={home.tokenId}></ViewPropertyDialog>
+                {
+                  home.isSold || <div className='ml-auto'> 
+                    {signer == home.seller 
+                    ? <Button onClick={() => onCancel(home)} variant="outline">Cancel Sales</Button> 
+                    : <Button onClick={() => onBuy(home)}>Buy Now</Button>
+                    }
+                  </div>
+                }
+              </CardFooter>
             </Card>
           ))}
         </div>
-        {toggle && (
-        <Home toggle={toggle} home={home} provider={provider} account={account} escrow={escrow} togglePop={togglePop} />
-        )}
     </main>
 
     </>
