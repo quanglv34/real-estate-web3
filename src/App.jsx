@@ -109,7 +109,7 @@ function App() {
                 {
                   home.isSold || <div className='ml-auto'> 
                     {signer == home.seller 
-                    ? home.isAvailable ??  <Button onClick={() => onCancel(home)} variant="outline">Cancel Sales</Button> 
+                    ? <Button onClick={() => onCancel(home)} variant="outline">Cancel Sales</Button> 
                     : <Button onClick={() => onBuy(home)}>Buy Now</Button>
                     }
                   </div>
