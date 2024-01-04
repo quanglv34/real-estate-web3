@@ -11,6 +11,7 @@ import { ViewPropertyDialog } from './components/ViewPropertyDialog';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './components/ui/card';
+import { toast } from './components/ui/use-toast';
 import { loadContracts } from './lib/contracts';
 
 function App() {
@@ -58,7 +59,13 @@ function App() {
   }
 
   const onCancel = async (home) => {
-
+    const { provider, marketplace, nft, token } = await loadContracts()
+    const tx2 = await marketplace.cancelPropertySales(parseInt(home.id))
+    await provider.waitForTransaction(tx2.hash)
+    loadBlockchainData()
+    toast({
+      description: "You cancel a property sales."
+    })
   }
 
   useEffect(() => {
@@ -102,7 +109,7 @@ function App() {
                 {
                   home.isSold || <div className='ml-auto'> 
                     {signer == home.seller 
-                    ? <Button onClick={() => onCancel(home)} variant="outline">Cancel Sales</Button> 
+                    ? home.isAvailable ??  <Button onClick={() => onCancel(home)} variant="outline">Cancel Sales</Button> 
                     : <Button onClick={() => onBuy(home)}>Buy Now</Button>
                     }
                   </div>

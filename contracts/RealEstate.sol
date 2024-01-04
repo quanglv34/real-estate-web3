@@ -74,7 +74,7 @@ contract RealEstate {
         require(item.available, "item doesn't available");
         require(!item.sold, "item is sold");
 
-        item.available = true;
+        item.available = false;
         
         item.nft.transferFrom(address(this), msg.sender, item.tokenId);
 
